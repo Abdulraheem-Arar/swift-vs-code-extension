@@ -7,13 +7,19 @@ import SwiftSyntax
 
 
 
-print("test ,the file should print this")
-fflush(stdout)
+//print("test ,the file should print this")
+//fflush(stdout)
 
 class MethodVisitor: SyntaxVisitor {
-    var methods: [String] = []
-    var arguments: [String] = []
+    var methods: [(name: String, line: Int, column:Int)] = []
+    var arguments: [(parameterType: String, line: Int)] = []
     private var insideClass: Bool = false
+    private let sourceLocationConverter: SourceLocationConverter
+
+    init(sourceLocationConverter: SourceLocationConverter) {
+        self.sourceLocationConverter = sourceLocationConverter
+        super.init(viewMode: .all)
+    }
 
      override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
     
@@ -29,6 +35,7 @@ class MethodVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+      /*
       if(insideClass){
         if(node.signature.parameterClause.parameters.count>3){
           methods.append(node.name.text)
@@ -40,6 +47,19 @@ class MethodVisitor: SyntaxVisitor {
           //print("Found Method: \(node.name.text)")
           //print(node.signature.parameterClause.parameters.count)
       } 
+      */
+      if (insideClass && node.signature.parameterClause.parameters.count > 3) {
+            let methodName = node.name.text
+            let methodStartLoc = sourceLocationConverter.location(for: node.positionAfterSkippingLeadingTrivia)
+
+            methods.append((name: methodName, line: methodStartLoc.line , column:methodStartLoc.column))
+
+            let parameters = node.signature.parameterClause.parameters
+            for parameter in parameters {
+              let paramLoc = sourceLocationConverter.location(for: parameter.positionAfterSkippingLeadingTrivia)
+                arguments.append((parameterType: parameter.type.description, line: paramLoc.line))
+            }
+      }
         return .visitChildren
     }
 }
@@ -52,7 +72,7 @@ class MethodVisitor: SyntaxVisitor {
     exit(1)
 }
      let filePath = CommandLine.arguments[1] 
-     print(filePath)
+     //print(filePath)
   // let filePath = "./testing/tester.swift";
 
     guard FileManager.default.fileExists(atPath: filePath) else {
@@ -66,11 +86,14 @@ class MethodVisitor: SyntaxVisitor {
       return
     }
 
-    let formattedFile = formatImports(in: file)
-    //print(formattedFile) 
-    let arguments = findArguments(in: formattedFile)
-    print("Found arguments: \(arguments) where there are more than than 3 input arguments in one of your methods")
-    
+   let sourceFile = formatImports(in: file)
+    let sourceLocationConverter = SourceLocationConverter(fileName: filePath, tree: sourceFile)
+    let arguments = findArguments(in: sourceFile, sourceLocationConverter: sourceLocationConverter)
+    let methods = findMethods(in: sourceFile, sourceLocationConverter: sourceLocationConverter)
+    if let jsonData = try? JSONSerialization.data(withJSONObject: methods.map { ["name": $0.name, "line": $0.line, "column": $0.column] }, options: .prettyPrinted),
+       let jsonString = String(data: jsonData, encoding: .utf8) {
+        print(jsonString)
+    }
 }
 
 
@@ -79,12 +102,16 @@ class MethodVisitor: SyntaxVisitor {
     return sourceFile
   }
 
- func findArguments(in file: SourceFileSyntax) -> [String] {
-    let visitor = MethodVisitor(viewMode: .all)
+ func findArguments(in file: SourceFileSyntax, sourceLocationConverter: SourceLocationConverter) -> [(parameterType: String, line: Int)] {
+    let visitor = MethodVisitor(sourceLocationConverter: sourceLocationConverter)
     visitor.walk(file)
     return visitor.arguments
  }
 
-   
+   func findMethods(in file: SourceFileSyntax, sourceLocationConverter: SourceLocationConverter) -> [(name: String, line: Int, column: Int)] {
+    let visitor = MethodVisitor(sourceLocationConverter: sourceLocationConverter)
+    visitor.walk(file)
+    return visitor.methods
+ }
 main()
 
