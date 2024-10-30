@@ -1,7 +1,14 @@
 // The module 'vscode' contains the VS Code extensibility API
+
 // Import the module and reference it with the alias vscode in your code below
 const vscode = require('vscode');
 const cp = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+let characterChangeCount = 0;
+const CHANGE_THRESHOLD = 40;
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 
@@ -10,13 +17,15 @@ const cp = require('child_process');
  */
 function activate(context) {
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
 	console.log('Congratulations, your extension "swiftDetect3" is now active!');
 
+    const diagnosticCollection = vscode.languages.createDiagnosticCollection('swiftDetect3');
+
+
 	function detectSwiftDocument(document) {
         if (document && document.languageId === 'swift') {
-            vscode.window.showInformationMessage('Swift file detected: ' + document.fileName);
+            //vscode.window.showInformationMessage('Swift file detected: ' + document.fileName);
         }
     }
 
@@ -27,17 +36,26 @@ function activate(context) {
         }
     });
 
+    vscode.workspace.onDidChangeTextDocument(event => {
+        const changes = event.contentChanges;
+        //console.log(changes)
+        changes.forEach(change => {
+            characterChangeCount += change.text.length;
+        });
+
+        if (characterChangeCount >= CHANGE_THRESHOLD) {
+            characterChangeCount = 0; // Reset counter after reaching the threshold
+            vscode.commands.executeCommand('swiftDetect3.3parameters')// Run your analysis
+        }
+    });
+
     // Detect already open Swift files when the extension is activated
     vscode.workspace.textDocuments.forEach(detectSwiftDocument);
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with  registerCommand
-	// The commandId parameter must match the command field in package.json
 	const disposable = vscode.commands.registerCommand('swiftDetect3.helloWorld', function () {
-		// The code you place here will be executed every time your command is executed
 		
 		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from swift detect 3!');
+		//vscode.window.showInformationMessage('Hello World from swift detect 3!');
 	});
 
 	const runCodeFile = vscode.commands.registerCommand('swiftDetect3.3parameters', function () {
@@ -46,32 +64,49 @@ function activate(context) {
         const analysisRootPath = '/home/abdulraheem/swiftDetect3/SWAN-static-analysis-'
 		// Display a message box to the user
         if (activeEditor) {
-            const filePath = activeEditor.document.fileName;
-            const scriptPath = '/home/abdulraheem/swiftDetect3/SWAN-static-analysis-/Sources/main.swift';
-            // Show a message that the file is running
-            vscode.window.showInformationMessage('Running: ' + filePath);
-            const outputChannel = vscode.window.createOutputChannel('Swift Analysis');
-            outputChannel.show(); // Opens the output channel in the editor
 
-            // Run the file using child_process (assuming it's a script or program that can be executed)
-            cp.exec(`cd ${analysisRootPath} && swift run tests ${filePath}`, (error, stdout, stderr) => { // You can change 'node' to the appropriate command, e.g., 'swift' for Swift files
+        const documentContent = activeEditor.document.getText();
+        const outputChannel = vscode.window.createOutputChannel('Swift Analysis');
+
+        // Create a temporary file to store unsaved document content
+        const tempFilePath = path.join(os.tmpdir(), `tempSwiftFile_${Date.now()}.swift`);
+        fs.writeFileSync(tempFilePath, documentContent)
+
+        //vscode.window.showInformationMessage('Running analysis on temporary file: ' + tempFilePath);
+
+            cp.exec(`cd ${analysisRootPath} && swift run tests ${tempFilePath}`, (error, stdout, stderr) => { 
                 if (error) {
+                    outputChannel.show();
                     outputChannel.appendLine(`Error: ${stderr}`);
-                } else {
-                    if (stdout) {
-                        outputChannel.appendLine(`Output: ${stdout}`);
-                    } else {
-                        outputChannel.appendLine("No output returned from the script.");
+                } else if (stdout) {
+                    try {
+                        const flaggedMethods = JSON.parse(stdout);  // Parse JSON output
+                        let diagnostics = []
+                        if (flaggedMethods.length > 0) {
+                            flaggedMethods.forEach(method => {
+                               // outputChannel.appendLine(`Flagged Method: ${method.name} at Line: ${method.line}`);
+                                const range = new vscode.Range(new vscode.Position(method.line - 1, method.column -1), new vscode.Position(method.line - 1, method.column -1));
+                                const diagnostic = new vscode.Diagnostic(range, `Method ${method.name} has more than 3 parameters`, vscode.DiagnosticSeverity.Warning); 
+                                diagnostics.push(diagnostic) 
+                            });
+                            diagnosticCollection.set(activeEditor.document.uri, diagnostics);
+                        } else {
+                            //outputChannel.show();
+                            //outputChannel.appendLine("No methods with more than 3 parameters were found.");
+                        }
+                    } catch (parseError) {
+                        outputChannel.show();
+                        outputChannel.appendLine(`Failed to parse output: ${parseError.message}`);
                     }
                 }
+                fs.unlinkSync(tempFilePath);
             });
         } else {
             vscode.window.showWarningMessage('No active editor with an open file.');
         }
-		vscode.window.showInformationMessage('Hello World from swift detect 3!');
-	});
+    });
 	
-	context.subscriptions.push(disposable,runCodeFile);
+	context.subscriptions.push(disposable,runCodeFile,diagnosticCollection);
 }
 
 // This method is called when your extension is deactivated
