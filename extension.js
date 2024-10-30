@@ -26,13 +26,14 @@ function activate(context) {
 	function detectSwiftDocument(document) {
         if (document && document.languageId === 'swift') {
             //vscode.window.showInformationMessage('Swift file detected: ' + document.fileName);
+            vscode.commands.executeCommand('swiftDetect3.3parameters')
         }
     }
 
     // Detect when a Swift file is opened or active editor changes
     vscode.window.onDidChangeActiveTextEditor(editor => {
         if (editor) {
-            detectSwiftDocument(editor.document);
+            vscode.commands.executeCommand('swiftDetect3.3parameters')
         }
     });
 
