@@ -15,12 +15,13 @@
     "commands": [{
       "command": "swiftDetect3.helloWorld",
       "title": "Hello World"
-    }
-  ,{
- "command": "swiftDetect3.3parameters",
+    },
+    {
+      "command": "swiftDetect3.3parameters",
       "title": "3parameters"
 
-  }]
+  }
+]
   },
   "scripts": {
     "lint": "eslint .",
