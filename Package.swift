@@ -20,5 +20,13 @@ let package = Package(
             ],
             path: "Sources"
         ),
+        .executableTarget(
+            name: "2params",
+            dependencies: [
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax"),
+            ],
+            path: "2parameters"
+        )
     ]
 )
