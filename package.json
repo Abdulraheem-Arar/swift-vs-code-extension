@@ -13,14 +13,18 @@
   "main": "./extension.js",
   "contributes": {
     "commands": [{
-      "command": "swiftDetect3.helloWorld",
-      "title": "Hello World"
+      "command": "swiftDetect3.menu",
+      "title": "analysis options"
     },
     {
       "command": "swiftDetect3.3parameters",
       "title": "3parameters"
 
-  }
+  },{
+    "command": "swiftDetect3.2parameters",
+    "title": "2parameters"
+
+}
 ]
   },
   "scripts": {
